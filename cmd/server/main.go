@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,11 +10,6 @@ import (
 	"time"
 
 	"github.com/andreipimenov/hotkv/storage"
-)
-
-const (
-	// Timeout respresents time to live for keys in storage.
-	Timeout = 30 * time.Second
 )
 
 // APIKeyValue struct contains key and value.
@@ -77,7 +71,7 @@ func GetKeys(s *storage.Storage) http.Handler {
 			return
 		}
 		key := uri[3]
-		value, err := s.Get(context.Background(), key)
+		value, err := s.Get(key)
 		if err != nil {
 			WriteResponse(w, APIResponse{
 				Code:    http.StatusText(http.StatusNotFound),
@@ -118,8 +112,7 @@ func SetKeys(s *storage.Storage) http.Handler {
 			}, http.StatusBadRequest)
 			return
 		}
-		ctx, _ := context.WithTimeout(context.Background(), Timeout)
-		s.Set(ctx, e.Key, e.Value)
+		s.Set(e.Key, e.Value)
 		WriteResponse(w, APIResponse{
 			Code:    http.StatusText(http.StatusCreated),
 			Message: fmt.Sprintf("Key %s is created successfully", e.Key),
@@ -128,13 +121,19 @@ func SetKeys(s *storage.Storage) http.Handler {
 }
 
 func main() {
-	s := storage.New()
+	// Create new storage with hardcoded timeout for keys = 30 seconds.
+	s, err := storage.New(30 * time.Second)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Setup handlers and start listening on hardcoded address = 127.0.0.1:8080.
 	http.Handle("/", NotFound())
 	http.Handle("/api/ping", Ping())
 	http.Handle("/api/keys", SetKeys(s))
 	http.Handle("/api/keys/", GetKeys(s))
 	log.Println("Server is listening on :8080")
-	err := http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
